@@ -71,17 +71,17 @@ st.session_state.setdefault("gps_t0",   0.0)
 
 st.markdown("<div style='height:25px;'></div>", unsafe_allow_html=True)
 
-'''
-# ROW 1: IP + GPS + Detected forecast button
-col1, col2, col3 = st.columns([0.3, 0.3, 0.4])
-with col1:
-    ip_clicked = st.button("🌐 Get IP location")
-with col2:
-    gps_clicked = st.button("📡 Get GPS location")
-with col3:
-    if st.button("Forecast (your location)"):
-        st.session_state["auto_btn"] = True
-'''
+
+# # ROW 1: IP + GPS + Detected forecast button
+# col1, col2, col3 = st.columns([0.3, 0.3, 0.4])
+# with col1:
+#     ip_clicked = st.button("🌐 Get IP location")
+# with col2:
+#     gps_clicked = st.button("📡 Get GPS location")
+# with col3:
+#     if st.button("Forecast (your location)"):
+#         st.session_state["auto_btn"] = True
+
 # ROW 1: GPS + Detected forecast button (IP button removed)
 # Note: "Get IP location" button is hidden
 col1, col2 = st.columns([0.5, 0.5])
@@ -123,16 +123,16 @@ if st.session_state["gps_wait"]:
     else:
         st.session_state["gps_wait"] = True  # Still waiting, rerun will check again
 
-'''
+
 # IP logic
-if ip_clicked and not st.session_state["gps_wait"]:
-    try:
-        data = requests.get("https://ipinfo.io/json", timeout=5).json()
-        lat, lon = map(float, (data.get("loc") or ",").split(","))
-        st.session_state.update(coords={"latitude": lat, "longitude": lon}, src="IP fallback")
-    except Exception:
-        st.session_state["src"] = "fail"
-'''
+# if ip_clicked and not st.session_state["gps_wait"]:
+#     try:
+#         data = requests.get("https://ipinfo.io/json", timeout=5).json()
+#         lat, lon = map(float, (data.get("loc") or ",").split(","))
+#         st.session_state.update(coords={"latitude": lat, "longitude": lon}, src="IP fallback")
+#     except Exception:
+#         st.session_state["src"] = "fail"
+
 # ROW 2: Info display
 coords = st.session_state["coords"]
 src    = st.session_state["src"]
