@@ -1,0 +1,9 @@
+streamlit
+streamlit-js-eval
+geopy
+numpy
+pandas
+matplotlib
+Pillow
+requests
+pytz
