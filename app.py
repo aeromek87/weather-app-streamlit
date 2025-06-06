@@ -71,6 +71,7 @@ st.session_state.setdefault("gps_t0",   0.0)
 
 st.markdown("<div style='height:25px;'></div>", unsafe_allow_html=True)
 
+'''
 # ROW 1: IP + GPS + Detected forecast button
 col1, col2, col3 = st.columns([0.3, 0.3, 0.4])
 with col1:
@@ -78,6 +79,15 @@ with col1:
 with col2:
     gps_clicked = st.button("📡 Get GPS location")
 with col3:
+    if st.button("Forecast (your location)"):
+        st.session_state["auto_btn"] = True
+'''
+# ROW 1: GPS + Detected forecast button (IP button removed)
+# Note: "Get IP location" button is hidden
+col1, col2 = st.columns([0.5, 0.5])
+with col1:
+    gps_clicked = st.button("📡 Get GPS location")
+with col2:
     if st.button("Forecast (your location)"):
         st.session_state["auto_btn"] = True
 
@@ -113,7 +123,7 @@ if st.session_state["gps_wait"]:
     else:
         st.session_state["gps_wait"] = True  # Still waiting, rerun will check again
 
-
+'''
 # IP logic
 if ip_clicked and not st.session_state["gps_wait"]:
     try:
@@ -122,7 +132,7 @@ if ip_clicked and not st.session_state["gps_wait"]:
         st.session_state.update(coords={"latitude": lat, "longitude": lon}, src="IP fallback")
     except Exception:
         st.session_state["src"] = "fail"
-
+'''
 # ROW 2: Info display
 coords = st.session_state["coords"]
 src    = st.session_state["src"]
@@ -348,4 +358,4 @@ elif st.session_state["auto_btn"]:
             label = f"{lat_dev:.4f}, {lon_dev:.4f}"
         build_forecast(lat_dev, lon_dev, label)
     else:
-        st.error("❌ No coordinates available – Get IP or GPS location first.")
+        st.error("❌ No coordinates available – Get GPS location first.")
