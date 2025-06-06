@@ -84,7 +84,7 @@ st.markdown("<div style='height:25px;'></div>", unsafe_allow_html=True)
 
 # ROW 1: GPS + Detected forecast button (IP button removed)
 # Note: "Get IP location" button is hidden
-col1, col2 = st.columns([0.5, 0.5])
+col1, col2 = st.columns([0.7, 0.3])
 with col1:
     gps_clicked = st.button("📡 Get GPS location")
 with col2:
