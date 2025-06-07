@@ -47,14 +47,18 @@ if os.path.exists("img/logo.png"):
     )
 
 # ────────────── Helper utilities ──────────────
-def choose_weather_icon(cloud, rain, snow):
-    if snow > 0.1: return "cloud_snow.png"
-    if rain > 0.1: return "sun_behind_rainy_cloud.png" if cloud < 0.5 else "cloud_rain.png"
-    if cloud > 0.9: return "cloudy.png"
-    if cloud > 0.7: return "smalSun_Bigcloud.png"
-    if cloud > 0.5: return "bigSun_smallCloud.png"
-    if cloud > 0.2: return "bigSun_smallCloud.png"
-    return "full_sun.png"
+def choose_weather_icon(cloud, rain, snow, is_night=False):
+    if snow > 0.1:
+        return "1_cloud_snow.png"  # same for day/night
+    if rain > 0.1:
+        return "3_moon_rainy_cloud.png" if is_night else "3_sun_rainy_cloud.png" if cloud < 0.5 else "2_cloud_rain.png"
+    if cloud > 0.9:
+        return "4_cloudy.png"
+    if cloud > 0.5:
+        return "5_smallMoon_cloud.png" if is_night else "5_smallSun_cloud.png"
+    if cloud > 0.2:
+        return "6_bigMoon_cloud.png" if is_night else "6_bigSun_cloud.png"
+    return "7_full_moon.png" if is_night else "7_full_sun.png"
 
 
 def time_formatter_factory(tz):
@@ -235,7 +239,6 @@ with col_btn:
 def build_forecast(lat: float, lon: float, label: str):
     # ——— Configuration identical to your second script ———
     forecast_hours    = 44
-    model             = "icon_d2"
     rain_threshold_mm = 0.0
     tz_local_str      = "Europe/Amsterdam"
     local_tz          = pytz.timezone(tz_local_str)
@@ -325,13 +328,16 @@ def build_forecast(lat: float, lon: float, label: str):
     ax_t.grid(True, zorder=0)
 
     for x, temp, cloud, rain, snow in zip(df["time"], df["temperature_2m"], df["cloud_cover"], df["rain"], df["snowfall"]):
-        icon_file = choose_weather_icon(cloud, rain, snow)
+        # Determine if current time is night (between sunset and next sunrise)
+        is_night = any(sunset <= x < sunrises[i+1] for i, sunset in enumerate(sunsets[:-1]))
+        icon_file = choose_weather_icon(cloud, rain, snow, is_night)
         icon_path = os.path.join("icons", icon_file)
         if os.path.exists(icon_path):
             img = mpimg.imread(icon_path)
             ab = AnnotationBbox(OffsetImage(img, zoom=0.05), (x, temp + 1.5),
                                 frameon=False, zorder=5)
             ax_t.add_artist(ab)
+
 
     # 2) Rain
     bar_w = 0.02
