@@ -247,7 +247,7 @@ def build_forecast(lat: float, lon: float, label: str):
         url = (
             "https://ensemble-api.open-meteo.com/v1/ensemble"
             f"?latitude={lat}&longitude={lon}"
-            "&hourly=temperature_2m,apparent_temperature,precipitation,rain,cloud_cover,"
+            "&hourly=temperature_2m,apparent_temperature,precipitation,rain,snowfall,cloud_cover,"
             "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
             f"&models={model_name}&forecast_hours={forecast_hours}"
             "&timeformat=unixtime&timezone=GMT"
@@ -291,6 +291,7 @@ def build_forecast(lat: float, lon: float, label: str):
             "cloud_cover":          np.array(data["hourly"]["cloud_cover"]) / 100.0,
             "precipitation":        data["hourly"]["precipitation"],
             "rain":                 data["hourly"]["rain"],
+            "snowfall":             data["hourly"]["snowfall"],
             "wind_speed_10m":       data["hourly"]["wind_speed_10m"],
             "wind_gusts_10m":       data["hourly"]["wind_gusts_10m"],
             "wind_direction_10m":   data["hourly"]["wind_direction_10m"],
@@ -322,9 +323,8 @@ def build_forecast(lat: float, lon: float, label: str):
     ax_t.set_ylabel("Temperature / Apparent [°C]", fontsize=title_fs)
     ax_t.grid(True, zorder=0)
 
-    for x, temp, cloud, rain in zip(df["time"], df["temperature_2m"],
-                                    df["cloud_cover"], df["rain"]):
-        icon_file = choose_weather_icon(cloud, rain, 0)
+    for x, temp, cloud, rain, snow in zip(df["time"], df["temperature_2m"], df["cloud_cover"], df["rain"], df["snowfall"]):
+        icon_file = choose_weather_icon(cloud, rain, snow)
         icon_path = os.path.join("icons", icon_file)
         if os.path.exists(icon_path):
             img = mpimg.imread(icon_path)
