@@ -64,7 +64,7 @@ def choose_weather_icon(cloud, rain, snow, is_night=False):
 def time_formatter_factory(tz):
     def _fmt(x, _):
         dt = mdates.num2date(x, tz=tz)
-        return dt.strftime("%H:%M\n%a") if dt.hour == 0 else dt.strftime("%H:%M")
+        return dt.strftime("%a") if dt.hour == 0 else dt.strftime("%H:%M")
     return _fmt
 
 
@@ -315,7 +315,7 @@ def build_forecast(lat: float, lon: float, label: str):
         sunsets  = pd.to_datetime(solar_data["daily"]["sunset"]).tz_localize(local_tz)
 
     # --------------------- Plot ---------------------
-    fig, axs = plt.subplots(3, 1, figsize=(16, 12), sharex=True)
+    fig, axs = plt.subplots(3, 1, figsize=(16, 12), sharex=False)
 
     # 1) Temperature
     ax_t = axs[0]
@@ -382,14 +382,16 @@ def build_forecast(lat: float, lon: float, label: str):
                        facecolor="lightgray", alpha=0.4, zorder=0)
 
     # Shared x-axis formatting
-    axs[-1].set_xlim(df["time"].iloc[0], df["time"].iloc[-1])
-    axs[-1].xaxis.set_major_formatter(FuncFormatter(time_formatter_factory(local_tz)))
+    for ax in axs:
+        ax.set_xlim(df["time"].iloc[0], df["time"].iloc[-1])
+        ax.xaxis.set_major_formatter(FuncFormatter(time_formatter_factory(local_tz)))
+        ax.tick_params(axis="x", labelsize=label_fs)
+
 
     for ax in axs:
         ax.tick_params(axis="both", labelsize=label_fs)
     ax_gst.tick_params(axis="y", labelsize=label_fs)
 
-    plt.xticks(rotation=45)
     plt.tight_layout()
 
     # ——— Output to Streamlit ———
