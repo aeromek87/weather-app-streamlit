@@ -63,7 +63,58 @@ def time_formatter_factory(tz):
         return dt.strftime("%H:%M\n%a") if dt.hour == 0 else dt.strftime("%H:%M")
     return _fmt
 
-# ───────── GEO BUTTONS + LAYOUT REORDERED ─────────
+
+def geonames_search(place_name):
+    username = st.secrets["geonames"]["username"]
+    url = "http://api.geonames.org/searchJSON"
+    params = {
+        "q": place_name,
+        "maxRows": 1,
+        "featureClass": "T",  # Terrain features (mountains, hills, etc.)
+        "username": username,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10).json()
+        if resp.get("geonames"):
+            g = resp["geonames"][0]
+            return {
+                "name": g.get("name"),
+                "country": g.get("countryName"),
+                "lat": float(g["lat"]),
+                "lon": float(g["lng"]),
+                "label": f'{g.get("name")}, {g.get("countryName")}'
+            }
+    except Exception:
+        return None
+    return None
+
+def geonames_nearby_feature(lat, lon):
+    username = st.secrets["geonames"]["username"]
+    url = "http://api.geonames.org/findNearbyJSON"
+    params = {
+        "lat": lat,
+        "lng": lon,
+        "featureClass": "T",  # Topographic features
+        "radius": 10,         # km
+        "maxRows": 1,
+        "username": username,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10).json()
+        if resp.get("geonames"):
+            g = resp["geonames"][0]
+            return {
+                "name": g.get("name"),
+                "country": g.get("countryName"),
+                "lat": float(g["lat"]),
+                "lon": float(g["lng"]),
+                "label": f'{g.get("name")}, {g.get("countryName")}'
+            }
+    except Exception:
+        return None
+    return None
+
+# ───────── GEO BUTTONS + LAYOUT ─────────
 st.session_state.setdefault("coords",   None)
 st.session_state.setdefault("src",      None)
 st.session_state.setdefault("gps_wait", False)
@@ -180,7 +231,7 @@ with col_btn:
 
 
 
-# ────────────── Forecast builder (unchanged) ──────────────
+# ────────────── Forecast builder ──────────────
 def build_forecast(lat: float, lon: float, label: str):
     # ——— Configuration identical to your second script ———
     forecast_hours    = 44
@@ -342,35 +393,49 @@ def build_forecast(lat: float, lon: float, label: str):
 # ────────────── Button handlers ──────────────
 if st.session_state["typed_btn"]:
     st.session_state["typed_btn"] = False
-    with st.spinner("Resolving place name…"):
-        loc = Nominatim(user_agent="weather_app").geocode(
-            st.session_state["typed_place"], addressdetails=True
-        )
-    if loc:
-        adr = loc.raw.get("address", {})
-        street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
-        city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
-        province = adr.get("state") or adr.get("region") or ""
-        label    = ", ".join(x for x in (street, city, province) if x)
-        build_forecast(loc.latitude, loc.longitude, label)
+    user_input = st.session_state["typed_place"].strip()
+
+    # Try GeoNames first
+    geonames_result = geonames_search(user_input)
+    if geonames_result:
+        label = geonames_result["label"]
+        build_forecast(geonames_result["lat"], geonames_result["lon"], label)
     else:
-        st.error("❌ Couldn’t geocode that place – be more specific.")
+        # fallback to Nominatim
+        with st.spinner("Resolving place name…"):
+            loc = Nominatim(user_agent="weather_app").geocode(
+                user_input, addressdetails=True)
+        if loc:
+            adr = loc.raw.get("address", {})
+            street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
+            city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
+            province = adr.get("state") or adr.get("region") or ""
+            label    = ", ".join(x for x in (street, city, province) if x)
+            build_forecast(loc.latitude, loc.longitude, label)
+        else:
+            st.error("❌ Couldn’t geocode that place – be more specific or check the spelling.")
 
 elif st.session_state["auto_btn"]:
     st.session_state["auto_btn"] = False
     if lat_dev is not None:
         with st.spinner("Resolving your location…"):
             rev = Nominatim(user_agent="weather_app").reverse(
-                (lat_dev, lon_dev), language="en", addressdetails=True
-            )
+                (lat_dev, lon_dev), language="en", addressdetails=True)
         if rev and hasattr(rev, "raw"):
             adr = rev.raw.get("address", {})
             street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
             city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
             province = adr.get("state") or adr.get("region") or ""
-            label    = ", ".join(x for x in (street, city, province) if x)
-        else:
-            label = f"{lat_dev:.4f}, {lon_dev:.4f}"
+        
+            if any([street, city, province]):
+                label = ", ".join(x for x in (street, city, province) if x)
+            else:
+                # Fallback: try GeoNames if address is too sparse
+                geo = geonames_nearby_feature(lat_dev, lon_dev)
+                if geo:
+                    label = geo["label"]
+                else:
+                    label = f"{lat_dev:.4f}, {lon_dev:.4f}"
         build_forecast(lat_dev, lon_dev, label)
     else:
         st.error("❌ No coordinates available – Get GPS location first.")
