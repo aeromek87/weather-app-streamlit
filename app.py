@@ -192,17 +192,30 @@ def build_forecast(lat: float, lon: float, label: str):
     label_fs          = 16
 
     # ---------------- Fetch weather ----------------
-    with st.spinner("Fetching weather data…"):
+    def fetch_icon_ensemble_data(lat, lon, model_name, forecast_hours):
         url = (
             "https://ensemble-api.open-meteo.com/v1/ensemble"
             f"?latitude={lat}&longitude={lon}"
             "&hourly=temperature_2m,apparent_temperature,precipitation,rain,cloud_cover,"
             "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
-            f"&models={model}&forecast_hours={forecast_hours}"
+            f"&models={model_name}&forecast_hours={forecast_hours}"
             "&timeformat=unixtime&timezone=GMT"
         )
-        data = requests.get(url, timeout=30).json()
-        if "hourly" not in data:
+        try:
+            return requests.get(url, timeout=30).json()
+        except Exception:
+            return {}
+    
+    with st.spinner("Fetching weather data…"):
+        model_used = None
+        for model_name in ["icon_d2", "icon_eu", "icon_global"]:
+            data = fetch_icon_ensemble_data(lat, lon, model_name, forecast_hours)
+            if "hourly" in data:
+                model_used = model_name
+                used_model = model_name.upper().replace("_", "-")
+                break
+    
+        if model_used is None:
             st.error("❌ Weather forecast not available for this location.")
             return
 
@@ -322,7 +335,7 @@ def build_forecast(lat: float, lon: float, label: str):
     plt.tight_layout()
 
     # ——— Output to Streamlit ———
-    st.markdown(f"##### Forecast for: {label}")
+    st.markdown(f"##### Forecast for: {label} ({used_model})")
     st.pyplot(fig)
 
 
@@ -335,9 +348,10 @@ if st.session_state["typed_btn"]:
         )
     if loc:
         adr = loc.raw.get("address", {})
-        street = " ".join(filter(None, [adr.get("house_number"), adr.get("road")]))
-        city   = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
-        label  = ", ".join(x for x in (street, city, adr.get("countrSy","")) if x) or loc.address
+        street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
+        city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
+        province = adr.get("state") or adr.get("region") or ""
+        label    = ", ".join(x for x in (street, city, province) if x)
         build_forecast(loc.latitude, loc.longitude, label)
     else:
         st.error("❌ Couldn’t geocode that place – be more specific.")
@@ -351,9 +365,10 @@ elif st.session_state["auto_btn"]:
             )
         if rev and hasattr(rev, "raw"):
             adr = rev.raw.get("address", {})
-            street = " ".join(filter(None, [adr.get("house_number"), adr.get("road")]))
-            city   = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
-            label  = ", ".join(x for x in (street, city, adr.get("country","")) if x)
+            street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
+            city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
+            province = adr.get("state") or adr.get("region") or ""
+            label    = ", ".join(x for x in (street, city, province) if x)
         else:
             label = f"{lat_dev:.4f}, {lon_dev:.4f}"
         build_forecast(lat_dev, lon_dev, label)
