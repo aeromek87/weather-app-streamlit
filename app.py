@@ -250,6 +250,7 @@ def build_forecast(lat: float, lon: float, label: str):
             "&hourly=temperature_2m,apparent_temperature,precipitation,rain,snowfall,cloud_cover,"
             "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
             f"&models={model_name}&forecast_hours={forecast_hours}"
+            "&snowfall_unit=cm"
             "&timeformat=unixtime&timezone=GMT"
         )
         try:
