@@ -285,38 +285,33 @@ def reverse_open_meteo(lat, lon, *, timeout=5):
 
 def safe_reverse(lat, lon):
     """
-    ➊ Try Open-Meteo (never rate-limited)
-    ➋ Try GeoNames (you already have the username)
-    ➌ Fall back to Nominatim (may 429 on Streamlit Cloud)
+    Try full Nominatim first; fallback to Open-Meteo or GeoNames if it fails.
     """
-    # ➊ Open-Meteo
+    try:
+        rev = nominatim_reverse((lat, lon), language="en", addressdetails=True)
+        if rev and rev.raw:
+            adr = rev.raw.get("address", {})
+            street = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
+            city   = (adr.get("city") or adr.get("town")
+                      or adr.get("village") or adr.get("hamlet") or "")
+            admin  = adr.get("state") or adr.get("region") or ""
+            country = adr.get("country") or ""
+            label = ", ".join(x for x in (street, city, admin, country) if x)
+            return {"label": label, "raw": rev.raw}
+    except (GeocoderUnavailable, GeocoderTimedOut):
+        pass
+
+    # Fallbacks
     r = reverse_open_meteo(lat, lon)
     if r and r["label"]:
         return r
 
-    # ➋ GeoNames – your helper already exists
     r = geonames_nearby_feature(lat, lon)
     if r:
         return r
 
-    # ➌ Nominatim with retries
-    for _ in range(2):                       # two quick retries
-        try:
-            rev = nominatim_reverse((lat, lon),
-                                    language="en", addressdetails=True)
-            if rev and rev.raw:
-                adr = rev.raw.get("address", {})
-                street = " ".join(filter(None, [adr.get("road"),
-                                                adr.get("house_number")]))
-                city   = (adr.get("city") or adr.get("town")
-                          or adr.get("village") or adr.get("hamlet") or "")
-                admin  = adr.get("state") or adr.get("region") or ""
-                country = adr.get("country") or ""
-                label = ", ".join(x for x in (street, city, admin, country) if x)
-                return {"label": label, "raw": rev.raw}
-        except (GeocoderUnavailable, GeocoderTimedOut):
-            time.sleep(1)                    # polite back-off
     return None
+
 
 
 # ───────── GEO BUTTONS + LAYOUT ─────────
