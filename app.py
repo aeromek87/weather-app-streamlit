@@ -28,6 +28,7 @@ for k, v in defaults.items():
 
 # ────────────── Configuration ──────────────
 GEONAMES_USERNAME = st.secrets["geonames"]["username"]
+GEOCODER = Nominatim(user_agent="weather_app", timeout=10)
 # ────────────── Logo ──────────────
 def _img_b64(path):
     buf = BytesIO(); Image.open(path).save(buf, format="PNG")
@@ -313,7 +314,7 @@ if st.session_state["gps_wait"]:
         st.session_state.update(coords=coords, src="GPS location", gps_wait=False)
         placeholder.empty()  # Remove message and component after success
         
-        rev = Nominatim(user_agent="weather_app").reverse(
+        rev = GEOCODER.reverse(
             (coords["latitude"], coords["longitude"]),
             language="en",                # always English
             addressdetails=True)
@@ -704,7 +705,7 @@ if st.session_state["typed_btn"]:
         build_forecast(geonames_result["lat"], geonames_result["lon"], label)
     else:
         with st.spinner("Resolving place name…"):
-            loc = Nominatim(user_agent="weather_app").geocode(
+            loc = GEOCODER.geocode(
                 user_input, addressdetails=True, language="en")
         if loc:
             adr = loc.raw.get("address", {})
@@ -724,8 +725,7 @@ elif st.session_state["auto_btn"]:
     st.session_state["auto_btn"] = False
     if lat_dev is not None:
         with st.spinner("Resolving your location…"):
-            rev = Nominatim(user_agent="weather_app").reverse(
-                (lat_dev, lon_dev), language="en", addressdetails=True, timeout=5)
+            rev = GEOCODER.reverse((lat_dev, lon_dev), language="en", addressdetails=True, timeout=5)
         if rev and hasattr(rev, "raw"):
             adr = rev.raw.get("address", {})
             street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
