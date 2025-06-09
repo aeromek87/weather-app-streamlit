@@ -377,11 +377,6 @@ if st.session_state["gps_wait"]:
         st.session_state.update(coords=coords, src="GPS location", gps_wait=False)
         placeholder.empty()  # Remove message and component after success
         
-        rev = GEOCODER.reverse(
-            (coords["latitude"], coords["longitude"]),
-            language="en",                # always English
-            addressdetails=True)
-    
         info = safe_reverse(coords["latitude"], coords["longitude"])
         st.session_state["label"] = info["label"] if info else None
 
