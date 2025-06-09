@@ -12,6 +12,8 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.image as mpimg
 from PIL import Image
 from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderUnavailable, GeocoderTimedOut
+from geopy.extra.rate_limiter import RateLimiter
 import streamlit as st
 from streamlit_js_eval import get_geolocation
 
@@ -29,6 +31,12 @@ for k, v in defaults.items():
 # ────────────── Configuration ──────────────
 GEONAMES_USERNAME = st.secrets["geonames"]["username"]
 GEOCODER = Nominatim(user_agent="weather_app", timeout=10)
+
+# simple 1-request-per-second wrapper
+nominatim_reverse = RateLimiter(GEOCODER.reverse, min_delay_seconds=1)
+nominatim_geocode = RateLimiter(GEOCODER.geocode, min_delay_seconds=1)
+
+
 # ────────────── Logo ──────────────
 def _img_b64(path):
     buf = BytesIO(); Image.open(path).save(buf, format="PNG")
@@ -256,6 +264,61 @@ def filter_best_nominatim(results, min_place_rank=15):
     return best
 
 
+def reverse_open_meteo(lat, lon, *, timeout=5):
+    """Fast reverse geocoder with generous limits (no key required)."""
+    url = ("https://geocoding-api.open-meteo.com/v1/reverse"
+           f"?latitude={lat}&longitude={lon}&count=1&language=en")
+    try:
+        data = requests.get(url, timeout=timeout).json()
+        r = data["results"][0]
+        city = r.get("name") or ""
+        admin = r.get("admin1") or ""
+        country = r.get("country") or ""
+        label = ", ".join(x for x in (city, admin, country) if x)
+        return {
+            "label": label,
+            "raw": r
+        }
+    except Exception:
+        return None
+
+
+def safe_reverse(lat, lon):
+    """
+    ➊ Try Open-Meteo (never rate-limited)
+    ➋ Try GeoNames (you already have the username)
+    ➌ Fall back to Nominatim (may 429 on Streamlit Cloud)
+    """
+    # ➊ Open-Meteo
+    r = reverse_open_meteo(lat, lon)
+    if r and r["label"]:
+        return r
+
+    # ➋ GeoNames – your helper already exists
+    r = geonames_nearby_feature(lat, lon)
+    if r:
+        return r
+
+    # ➌ Nominatim with retries
+    for _ in range(2):                       # two quick retries
+        try:
+            rev = nominatim_reverse((lat, lon),
+                                    language="en", addressdetails=True)
+            if rev and rev.raw:
+                adr = rev.raw.get("address", {})
+                street = " ".join(filter(None, [adr.get("road"),
+                                                adr.get("house_number")]))
+                city   = (adr.get("city") or adr.get("town")
+                          or adr.get("village") or adr.get("hamlet") or "")
+                admin  = adr.get("state") or adr.get("region") or ""
+                country = adr.get("country") or ""
+                label = ", ".join(x for x in (street, city, admin, country) if x)
+                return {"label": label, "raw": rev.raw}
+        except (GeocoderUnavailable, GeocoderTimedOut):
+            time.sleep(1)                    # polite back-off
+    return None
+
+
 # ───────── GEO BUTTONS + LAYOUT ─────────
 st.session_state.setdefault("coords",   None)
 st.session_state.setdefault("src",      None)
@@ -319,17 +382,9 @@ if st.session_state["gps_wait"]:
             language="en",                # always English
             addressdetails=True)
     
-        if rev and hasattr(rev, "raw"):
-            adr = rev.raw.get("address", {})
-            street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
-            city     = (adr.get("city") or adr.get("town") or
-                        adr.get("village") or adr.get("hamlet") or "")
-            province = adr.get("state") or adr.get("region") or ""
-            country  = adr.get("country") or ""          # already English because language="en"
-            label = ", ".join(x for x in (street, city, province, country) if x)
-            st.session_state["label"] = label
-        else:
-            st.session_state["label"] = None
+        info = safe_reverse(coords["latitude"], coords["longitude"])
+        st.session_state["label"] = info["label"] if info else None
+
     else:
         st.session_state["gps_wait"] = True  # Still waiting, rerun will check again
 
@@ -725,24 +780,18 @@ elif st.session_state["auto_btn"]:
     st.session_state["auto_btn"] = False
     if lat_dev is not None:
         with st.spinner("Resolving your location…"):
-            rev = GEOCODER.reverse((lat_dev, lon_dev), language="en", addressdetails=True, timeout=5)
-        if rev and hasattr(rev, "raw"):
-            adr = rev.raw.get("address", {})
-            street   = " ".join(filter(None, [adr.get("road"), adr.get("house_number")]))
-            city     = adr.get("city") or adr.get("town") or adr.get("village") or adr.get("hamlet") or ""
-            province = adr.get("state") or adr.get("region") or ""
-            country  = adr.get("country") or ""
+            info = safe_reverse(lat_dev, lon_dev)
         
-            if any([street, city, province]):
-                label = ", ".join(x for x in (street, city, province, country) if x)
-                st.session_state["label"] = label
+        if info and info["label"]:
+            st.session_state["label"] = info["label"]
+        else:
+            # Fallback: try GeoNames if address is too sparse
+            geo = geonames_nearby_feature(lat_dev, lon_dev)
+            if geo:
+                label = geo["label"]
             else:
-                # Fallback: try GeoNames if address is too sparse
-                geo = geonames_nearby_feature(lat_dev, lon_dev)
-                if geo:
-                    label = geo["label"]
-                else:
-                    label = f"{lat_dev:.4f}, {lon_dev:.4f}"
+                label = f"{lat_dev:.4f}, {lon_dev:.4f}"
+            st.session_state["label"] = label
         build_forecast(lat_dev, lon_dev, label)
     else:
         st.error("❌ No coordinates available – Get GPS location first.")
